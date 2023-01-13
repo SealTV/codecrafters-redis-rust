@@ -27,9 +27,7 @@ fn handle_client(mut stream: TcpStream) {
     while match stream.read(&mut data) {
         Ok(size) => {
             // echo everything!
-            let msg = "PONG";
-            let data = msg.as_bytes();
-            stream.write(&data[0..size]).unwrap();
+            stream.write("+PONG\r\n".as_bytes()).unwrap();
             true
         },
         Err(_) => {
