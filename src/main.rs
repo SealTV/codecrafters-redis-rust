@@ -1,39 +1,43 @@
-use std::thread;
-use std::net::{TcpListener, TcpStream, Shutdown};
-use std::io::{Read, Write};
+use anyhow::Result;
+use bytes::BytesMut;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
-    
-    for stream in listener.incoming() {
-        match stream {
-            Ok(_stream) => {
-                println!("New connection: {}", _stream.peer_addr().unwrap());
-                thread::spawn(move|| {
-                    // connection succeeded
-                    handle_client(_stream)
+#[tokio::main]
+async fn main() -> Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:6379").await?;
+   
+    loop {
+        let incoming = listener.accept().await;
+
+        match incoming {
+            Ok((mut stream, _))=> {
+                println!("accept new connection");
+
+                tokio::spawn(async move {
+                    handle_connection(&mut stream).await.unwrap();
                 });
             }
             Err(e) => {
-                println!("error: {}", e);
+                println!("error {}", e);
             }
         }
     }
 }
 
-fn handle_client(mut stream: TcpStream) {
-    let mut data = [0 as u8; 50]; // using 50 byte buffer
 
-    while match stream.read(&mut data) {
-        Ok(size) => {
-            // echo everything!
-            stream.write("+PONG\r\n".as_bytes()).unwrap();
-            true
-        },
-        Err(_) => {
-            println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
-            stream.shutdown(Shutdown::Both).unwrap();
-            false
+async fn handle_connection(stream: &mut TcpStream) -> Result<()> {
+    let mut buf = BytesMut::with_capacity(512);
+
+    loop {
+        let bytes_readed = stream.read(&mut buf).await?;
+        if bytes_readed == 0 {
+            print!("client close the connection");
+            break;
         }
-    } {}
+
+        stream.write("+PONG\r\n".as_bytes()).await?;
+    }
+
+    Ok(())
 }
